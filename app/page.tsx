@@ -1,63 +1,140 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Header } from "./components/Header";
+import { Card } from "./components/ui/card";
+import { Badge } from "./components/ui/badge";
+import { Button } from "./components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
+import { ArrowUp, MessageSquare, TrendingUp } from "lucide-react";
+import { toast } from "sonner";
+import { useFeedback } from "./hooks/useFeedback";
+import { useAuth } from "./hooks/useAuth";
+
+export default function DashboardPage() {
+  const { feedbackList, upvoteFeedback } = useFeedback();
+  const { user, isAuthenticated } = useAuth();
+  const router = useRouter();
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+
+  const handleUpvote = (id: string) => {
+    if (!isAuthenticated || !user) {
+      toast.error("Please log in to upvote");
+      router.push("/login");
+      return;
+    }
+    upvoteFeedback(id, user.username);
+  };
+
+  const filteredFeedback = selectedCategory === "all" 
+    ? feedbackList 
+    : feedbackList.filter((f: any) => f.category === selectedCategory);
+
+  const sortedFeedback = [...filteredFeedback].sort((a, b) => b.upvotes - a.upvotes);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+      <Header />
+      
+      <main className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          {/* Welcome Banner */}
+          <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-8 mb-8 text-white">
+            <div className="flex items-center gap-3 mb-3">
+              <TrendingUp className="size-8" />
+              <h2 className="text-2xl font-semibold">Community Feedback</h2>
+            </div>
+            <p className="text-white/90 mb-4">
+              Discover what the community is asking for. Vote on ideas you'd like to see implemented.
+            </p>
+            <div className="flex gap-4 text-sm">
+              <div>
+                <p className="text-white/80">Total Feedback</p>
+                <p className="text-2xl font-semibold">{feedbackList.length}</p>
+              </div>
+              <div className="border-l border-white/20 pl-4">
+                <p className="text-white/80">Total Upvotes</p>
+                <p className="text-2xl font-semibold">
+                  {feedbackList.reduce((sum: number, f: any) => sum + f.upvotes, 0)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Category Tabs */}
+          <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="mb-6">
+            <TabsList className="grid w-full grid-cols-5 bg-white">
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="feature">Features</TabsTrigger>
+              <TabsTrigger value="bug">Bugs</TabsTrigger>
+              <TabsTrigger value="improvement">Improvements</TabsTrigger>
+              <TabsTrigger value="other">Other</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {/* Feedback List */}
+          <div className="space-y-4">
+            {sortedFeedback.length === 0 ? (
+              <div className="bg-white rounded-lg border p-12 text-center">
+                <MessageSquare className="size-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="font-semibold mb-2">No feedback yet</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Be the first to share your ideas!
+                </p>
+                {isAuthenticated && (
+                  <Button onClick={() => router.push("/create")}>
+                    Create Feedback
+                  </Button>
+                )}
+              </div>
+            ) : (
+              sortedFeedback.map(feedback => {
+                const hasUpvoted = user ? feedback.upvotedBy.includes(user.username) : false;
+                
+                return (
+                  <Card 
+                    key={feedback.id} 
+                    className="p-6 hover:shadow-lg transition-all cursor-pointer"
+                    onClick={() => router.push(`/feedback/${feedback.id}`)}
+                  >
+                    <div className="flex gap-4">
+                      <div className="flex flex-col items-center gap-1">
+                        <Button
+                          variant={hasUpvoted ? "default" : "outline"}
+                          size="sm"
+                          className="h-auto flex-col gap-1 px-3 py-2"
+                          onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                            e.stopPropagation();
+                            handleUpvote(feedback.id);
+                          }}
+                          disabled={!isAuthenticated}
+                        >
+                          <ArrowUp className="size-4" />
+                          <span className="text-sm">{feedback.upvotes}</span>
+                        </Button>
+                      </div>
+                      <div className="flex-1 space-y-3">
+                        <div>
+                          <h3 className="font-semibold mb-1">{feedback.title}</h3>
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {feedback.description}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Badge variant="secondary">{feedback.category}</Badge>
+                          <span>•</span>
+                          <span>by {feedback.author}</span>
+                          <span>•</span>
+                          <span>{new Date(feedback.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })
+            )}
+          </div>
         </div>
       </main>
     </div>
