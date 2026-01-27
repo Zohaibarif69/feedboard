@@ -7,6 +7,7 @@ export interface Feedback {
   title: string;
   description: string;
   category: "feature" | "bug" | "improvement" | "other";
+  status: string;
   author: string;
   authorId: string;
   upvotes: number;
@@ -27,6 +28,7 @@ const MOCK_FEEDBACK: Feedback[] = [
     title: "Dark Mode Support",
     description: "Add a dark mode option to the application for better usability at night.",
     category: "feature",
+    status: "open",
     author: "john_doe",
     authorId: "1",
     upvotes: 45,
@@ -40,6 +42,7 @@ const MOCK_FEEDBACK: Feedback[] = [
     title: "Fix login button styling",
     description: "The login button appears misaligned on mobile devices.",
     category: "bug",
+    status: "open",
     author: "jane_smith",
     authorId: "2",
     upvotes: 12,
@@ -53,6 +56,7 @@ const MOCK_FEEDBACK: Feedback[] = [
     title: "Improve Search Performance",
     description: "Search results are slow when dealing with large datasets.",
     category: "improvement",
+    status: "open",
     author: "bob_wilson",
     authorId: "3",
     upvotes: 28,

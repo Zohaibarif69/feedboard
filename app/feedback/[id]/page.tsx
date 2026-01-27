@@ -15,7 +15,7 @@ import { useAuth } from "../../hooks/useAuth";
 export default function FeedbackDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const { feedbackList, upvoteFeedback, addComment } = useFeedback();
+  const { feedbackList, upvoteFeedback } = useFeedback();
   const { user, isAuthenticated } = useAuth();
   const [comment, setComment] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -68,11 +68,14 @@ export default function FeedbackDetailPage() {
 
     setIsLoading(true);
     try {
-      addComment(feedback.id, {
+      if (!feedback.comments) {
+        feedback.comments = [];
+      }
+      feedback.comments.push({
         id: Date.now().toString(),
         author: user.username,
         text: comment,
-        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
       });
       setComment("");
       toast.success("Comment added successfully");
@@ -111,7 +114,7 @@ export default function FeedbackDetailPage() {
               </div>
               <Button
                 onClick={handleUpvote}
-                variant={feedback.upvotedBy?.includes(user?.username) ? "default" : "outline"}
+                variant={feedback.upvotedBy?.includes(user?.username ?? "") ? "default" : "outline"}
                 size="lg"
                 className="flex flex-col items-center gap-1 h-auto py-3 px-4"
               >
