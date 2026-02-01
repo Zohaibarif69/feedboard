@@ -1,0 +1,96 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum FeedbackCategory {
+  feature
+  bug
+  improvement
+  other
+}
+
+enum FeedbackStatus {
+  open
+  planned
+  in_progress
+  closed
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  username  String    @unique
+  email     String    @unique
+  password  String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  sessions  Session[]
+  feedbacks Feedback[]
+  comments  Comment[]
+  upvotes   Upvote[]
+}
+
+model Session {
+  id               Int      @id @default(autoincrement())
+  token            String   @unique
+  refreshToken     String   @unique
+  userId           Int
+  expiresAt        DateTime
+  refreshExpiresAt DateTime
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Feedback {
+  id          Int              @id @default(autoincrement())
+  title       String
+  description String
+  category    FeedbackCategory
+  status      FeedbackStatus   @default(open)
+  upvotes     Int              @default(0)
+  authorId    Int
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  upvoteBy Upvote[]
+
+  @@index([authorId])
+  @@index([category, status])
+}
+
+model Comment {
+  id         Int      @id @default(autoincrement())
+  feedbackId Int
+  authorId   Int
+  text       String
+  createdAt  DateTime @default(now())
+
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([feedbackId])
+  @@index([authorId])
+}
+
+model Upvote {
+  id         Int      @id @default(autoincrement())
+  feedbackId Int
+  userId     Int
+  createdAt  DateTime @default(now())
+
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([feedbackId, userId])
+  @@index([userId])
+}

@@ -3,17 +3,17 @@
 import { useState, useEffect } from "react";
 
 export interface Feedback {
-  id: string;
+  id: number;
   title: string;
   description: string;
   category: "feature" | "bug" | "improvement" | "other";
   status: string;
   author: string;
-  authorId: string;
+  authorId: number;
   upvotes: number;
-  upvotedBy: string[];
+  upvotedBy: number[];
   comments: Array<{
-    id: string;
+    id: number;
     author: string;
     text: string;
     createdAt: string;
@@ -22,113 +22,102 @@ export interface Feedback {
   updatedAt: string;
 }
 
-const MOCK_FEEDBACK: Feedback[] = [
-  {
-    id: "1",
-    title: "Dark Mode Support",
-    description: "Add a dark mode option to the application for better usability at night.",
-    category: "feature",
-    status: "open",
-    author: "john_doe",
-    authorId: "1",
-    upvotes: 45,
-    upvotedBy: ["jane_smith"],
-    comments: [],
-    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    title: "Fix login button styling",
-    description: "The login button appears misaligned on mobile devices.",
-    category: "bug",
-    status: "open",
-    author: "jane_smith",
-    authorId: "2",
-    upvotes: 12,
-    upvotedBy: [],
-    comments: [],
-    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "3",
-    title: "Improve Search Performance",
-    description: "Search results are slow when dealing with large datasets.",
-    category: "improvement",
-    status: "open",
-    author: "bob_wilson",
-    authorId: "3",
-    upvotes: 28,
-    upvotedBy: ["john_doe", "jane_smith"],
-    comments: [],
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
 export function useFeedback() {
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);
   const [loading, setLoading] = useState(true);
+  const [upvotingIds, setUpvotingIds] = useState<Set<number>>(new Set()); // Track upvotes in progress
 
+  // Load feedback from API on mount
   useEffect(() => {
-    // Load feedback from localStorage or use mock data
-    const storedFeedback = localStorage.getItem("feedback");
-    if (storedFeedback) {
-      try {
-        setFeedbackList(JSON.parse(storedFeedback));
-      } catch (error) {
-        console.error("Failed to parse stored feedback:", error);
-        setFeedbackList(MOCK_FEEDBACK);
-      }
-    } else {
-      setFeedbackList(MOCK_FEEDBACK);
-    }
-    setLoading(false);
+    fetchFeedback();
   }, []);
 
-  const addFeedback = (feedback: Omit<Feedback, "id" | "upvotes" | "upvotedBy" | "createdAt" | "updatedAt">) => {
-    const newFeedback: Feedback = {
-      ...feedback,
-      id: Date.now().toString(),
-      upvotes: 0,
-      upvotedBy: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    const updated = [...feedbackList, newFeedback];
-    setFeedbackList(updated);
-    localStorage.setItem("feedback", JSON.stringify(updated));
-    return newFeedback;
+  const fetchFeedback = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/auth/feedback");
+      if (!response.ok) throw new Error("Failed to fetch feedback");
+      const data = await response.json();
+      setFeedbackList(data);
+    } catch (error) {
+      console.error("Error fetching feedback:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const upvoteFeedback = (feedbackId: string, username: string) => {
-    const updated = feedbackList.map((f) => {
-      if (f.id === feedbackId) {
-        const hasUpvoted = f.upvotedBy.includes(username);
-        return {
-          ...f,
-          upvotes: hasUpvoted ? f.upvotes - 1 : f.upvotes + 1,
-          upvotedBy: hasUpvoted
-            ? f.upvotedBy.filter((u) => u !== username)
-            : [...f.upvotedBy, username],
-        };
+  const addFeedback = async (feedback: {
+    title: string;
+    description: string;
+    category: "feature" | "bug" | "improvement" | "other";
+    authorId: number;
+  }) => {
+    try {
+      const response = await fetch("/api/auth/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(feedback),
+      });
+
+      if (!response.ok) throw new Error("Failed to create feedback");
+      const newFeedback = await response.json();
+      setFeedbackList([newFeedback, ...feedbackList]);
+      return newFeedback;
+    } catch (error) {
+      console.error("Error creating feedback:", error);
+      throw error;
+    }
+  };
+
+  // Handle upvote/unvote with prevention of duplicate requests
+  const upvoteFeedback = async (feedbackId: number, token: string, hasUpvoted: boolean) => {
+    // Prevent duplicate requests
+    if (upvotingIds.has(feedbackId)) {
+      return;
+    }
+
+    setUpvotingIds((prev) => new Set([...prev, feedbackId]));
+
+    try {
+      const action = hasUpvoted ? "unvote" : "upvote";
+      const response = await fetch("/api/auth/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action, feedbackId }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to ${action}`);
       }
-      return f;
-    });
-    setFeedbackList(updated);
-    localStorage.setItem("feedback", JSON.stringify(updated));
+
+      // Refresh feedback list to get updated upvote counts
+      await fetchFeedback();
+    } catch (error) {
+      console.error(`Error ${hasUpvoted ? "removing" : "adding"} upvote:`, error);
+      throw error;
+    } finally {
+      setUpvotingIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(feedbackId);
+        return newSet;
+      });
+    }
   };
 
-  const getFeedbackById = (id: string) => {
+  const getFeedbackById = (id: number) => {
     return feedbackList.find((f) => f.id === id);
   };
 
   return {
     feedbackList,
     loading,
+    upvotingIds, // Export to prevent UI submission when upvote in progress
     addFeedback,
     upvoteFeedback,
     getFeedbackById,
+    fetchFeedback,
   };
 }

@@ -18,32 +18,42 @@ export default function CreateFeedbackPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<"feature" | "bug" | "improvement" | "other">("feature");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { addFeedback } = useFeedback();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const router = useRouter(); 
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (title && description && user) {
-      addFeedback({
+    if (!title || !description || !user || !token) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await addFeedback({
         title,
         description,
         category,
-        status: "open",
-        author: user.username,
         authorId: user.id,
-        comments: [],
       });
 
       toast.success("Feedback created successfully!");
       router.push("/"); 
+    } catch (error) {
+      console.error("Error creating feedback:", error);
+      toast.error("Failed to create feedback");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
       <Header />
 
       <main className="container mx-auto px-4 py-8">
@@ -113,11 +123,12 @@ export default function CreateFeedbackPage() {
                     variant="outline"
                     onClick={() => router.push("/")} 
                     className="flex-1"
+                    disabled={isSubmitting}
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" className="flex-1">
-                    Submit Feedback
+                  <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                    {isSubmitting ? "Creating..." : "Submit Feedback"}
                   </Button>
                 </div>
               </form>
