@@ -50,12 +50,15 @@ export function useFeedback() {
     title: string;
     description: string;
     category: "feature" | "bug" | "improvement" | "other";
-    authorId: number;
   }) => {
     try {
+      const token = localStorage.getItem("token");
       const response = await fetch("/api/auth/feedback", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(feedback),
       });
 

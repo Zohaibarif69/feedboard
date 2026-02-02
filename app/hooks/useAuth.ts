@@ -113,9 +113,13 @@ export function useAuth() {
     }
   };
 
-    register,
+  return {
+    user,
+    token,
+    isAuthenticated,
     loading,
     login,
     logout,
+    register,
   };
 }

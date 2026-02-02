@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 
+const isProduction = process.env.NODE_ENV === "production";
+
 // Utility functions
 async function hashPassword(password: string): Promise<string> {
   // Use bcrypt in production for better security
@@ -14,6 +16,15 @@ function generateToken(): string {
 
 function generateRefreshToken(): string {
   return crypto.randomBytes(32).toString("hex");
+}
+
+function getTokenFromRequest(request: NextRequest): string | null {
+  const authHeader = request.headers.get("authorization");
+  const bearer = authHeader?.startsWith("Bearer ")
+    ? authHeader.replace("Bearer ", "")
+    : null;
+  const cookieToken = request.cookies.get("token")?.value || null;
+  return bearer || cookieToken;
 }
 
 // Verify token
@@ -122,7 +133,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         message: "Login successful",
         token,
@@ -136,6 +147,24 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     );
+
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: isProduction,
+      path: "/",
+      maxAge: expiresIn,
+    });
+
+    response.cookies.set("refreshToken", refreshToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: isProduction,
+      path: "/",
+      maxAge: refreshExpiresIn,
+    });
+
+    return response;
   } catch (error) {
     console.error("Error in auth POST:", error);
     return NextResponse.json(
@@ -149,7 +178,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action");
-    const token = request.headers.get("authorization")?.replace("Bearer ", "");
+    const token = getTokenFromRequest(request);
 
     // GET CURRENT USER
     if (action === "me" || !action) {
@@ -262,13 +291,23 @@ export async function PUT(request: NextRequest) {
         },
       });
 
-      return NextResponse.json(
+      const response = NextResponse.json(
         {
           token: newToken,
           expiresIn,
         },
         { status: 200 }
       );
+
+      response.cookies.set("token", newToken, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: isProduction,
+        path: "/",
+        maxAge: expiresIn,
+      });
+
+      return response;
     }
 
     return NextResponse.json(
@@ -288,7 +327,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action");
-    const token = request.headers.get("authorization")?.replace("Bearer ", "");
+    const token = getTokenFromRequest(request);
 
     // LOGOUT ENDPOINT
     if (action === "logout") {
@@ -303,10 +342,28 @@ export async function DELETE(request: NextRequest) {
         where: { token },
       });
 
-      return NextResponse.json(
+      const response = NextResponse.json(
         { message: "Logged out successfully" },
         { status: 200 }
       );
+
+      response.cookies.set("token", "", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: isProduction,
+        path: "/",
+        maxAge: 0,
+      });
+
+      response.cookies.set("refreshToken", "", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: isProduction,
+        path: "/",
+        maxAge: 0,
+      });
+
+      return response;
     }
 
     return NextResponse.json(

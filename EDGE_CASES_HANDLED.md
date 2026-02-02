@@ -1,6 +1,6 @@
-# Edge Cases Handled ✅
+# Edge Cases Handled 
 
-## 1. **User Refreshes Page → Stays Logged In** ✅
+## 1. **User Refreshes Page → Stays Logged In** 
 
 **Implementation:**
 - Tokens stored in `localStorage` (token, refreshToken, user data)
@@ -28,7 +28,7 @@ useEffect(() => {
 
 ---
 
-## 2. **User Tries to Upvote Twice → Blocked** ✅
+## 2. **User Tries to Upvote Twice → Blocked** 
 
 **Implementation - Triple Prevention:**
 
@@ -72,7 +72,7 @@ model Upvote {
 
 ---
 
-## 3. **Unauthorized Access → Redirect** ✅
+## 3. **Unauthorized Access → Redirect** 
 
 **Implementation - Multi-Layer Protection:**
 
@@ -144,14 +144,14 @@ if (action === "upvote" || action === "unvote") {
 
 | Edge Case | Prevention Method | Status |
 |-----------|------------------|--------|
-| Page refresh loses login | localStorage persistence | ✅ |
-| User refreshes during request | Request tracking (upvotingIds) | ✅ |
-| Duplicate upvotes | DB unique constraint + API check | ✅ |
-| Unauthorized access to /create | Middleware + ProtectedRoute | ✅ |
-| Unauthorized access to /feedback | Middleware + ProtectedRoute | ✅ |
-| Invalid token on API call | verifyToken() + 401 response | ✅ |
-| Token expiry | Token stored with expiry time | ✅ |
-| Multiple simultaneous requests | Request deduplication in hooks | ✅ |
+| Page refresh loses login | localStorage persistence | 
+| User refreshes during request | Request tracking (upvotingIds) | 
+| Duplicate upvotes | DB unique constraint + API check | 
+| Unauthorized access to /create | Middleware + ProtectedRoute | 
+| Unauthorized access to /feedback | Middleware + ProtectedRoute | 
+| Invalid token on API call | verifyToken() + 401 response |  |
+| Token expiry | Token stored with expiry time |  |
+| Multiple simultaneous requests | Request deduplication in hooks |
 
 ---
 
@@ -161,21 +161,21 @@ if (action === "upvote" || action === "unvote") {
 ```
 1. Login
 2. Refresh page (F5)
-3. Should remain logged in ✅
+3. Should remain logged in
 ```
 
 ### Test 2: Prevent Duplicate Upvote
 ```
 1. Click upvote button
 2. Click again immediately
-3. Only one request sent ✅
-4. Can't upvote same item twice ✅
+3. Only one request sent 
+4. Can't upvote same item twice 
 ```
 
 ### Test 3: Unauthorized Access
 ```
 1. Open /create without logging in
-2. Middleware redirects to /login ✅
+2. Middleware redirects to /login 
 3. Click "Create Feedback" without token
-4. API returns 401 ✅
+4. API returns 401 
 ```

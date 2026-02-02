@@ -21,14 +21,19 @@ export default function CreateFeedbackPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { addFeedback } = useFeedback();
-  const { user, token } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const router = useRouter(); 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!title || !description || !user || !token) {
+    if (!title || !description) {
       toast.error("Please fill in all fields");
+      return;
+    }
+
+    if (!user || !isAuthenticated) {
+      toast.error("Please log in to continue");
       return;
     }
 
@@ -39,7 +44,6 @@ export default function CreateFeedbackPage() {
         title,
         description,
         category,
-        authorId: user.id,
       });
 
       toast.success("Feedback created successfully!");

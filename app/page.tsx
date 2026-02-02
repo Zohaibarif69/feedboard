@@ -14,17 +14,17 @@ import { useAuth } from "./hooks/useAuth";
 
 export default function DashboardPage() {
   const { feedbackList, upvoteFeedback } = useFeedback();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading, login, logout, register } = useAuth();
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
-  const handleUpvote = (id: string) => {
+  const handleUpvote = (id: number, hasUpvoted: boolean) => {
     if (!isAuthenticated || !user) {
       toast.error("Please log in to upvote");
       router.push("/login");
       return;
     }
-    upvoteFeedback(id, user.username);
+    upvoteFeedback(id, String(user.id), hasUpvoted);
   };
 
   const filteredFeedback = selectedCategory === "all" 
@@ -90,11 +90,11 @@ export default function DashboardPage() {
               </div>
             ) : (
               sortedFeedback.map(feedback => {
-                const hasUpvoted = user ? feedback.upvotedBy.includes(user.username) : false;
-                
+                const hasUpvoted = user ? feedback.upvotedBy.includes(user.id) : false;
+
                 return (
-                  <Card 
-                    key={feedback.id} 
+                  <Card
+                    key={feedback.id}
                     className="p-6 hover:shadow-lg transition-all cursor-pointer"
                     onClick={() => router.push(`/feedback/${feedback.id}`)}
                   >
@@ -106,7 +106,7 @@ export default function DashboardPage() {
                           className="h-auto flex-col gap-1 px-3 py-2"
                           onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                             e.stopPropagation();
-                            handleUpvote(feedback.id);
+                            handleUpvote(feedback.id, hasUpvoted);
                           }}
                           disabled={!isAuthenticated}
                         >

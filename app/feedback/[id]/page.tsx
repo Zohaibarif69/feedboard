@@ -13,10 +13,10 @@ import { useFeedback } from "../../hooks/useFeedback";
 import { useAuth } from "../../hooks/useAuth";
 
 export default function FeedbackDetailPage() {
+  const { feedbackList, upvoteFeedback } = useFeedback();
+  const { user, isAuthenticated, loading, login, logout, register, token } = useAuth();
   const router = useRouter();
   const params = useParams();
-  const { feedbackList, upvoteFeedback } = useFeedback();
-  const { user, isAuthenticated } = useAuth();
   const [comment, setComment] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -45,13 +45,13 @@ export default function FeedbackDetailPage() {
     );
   }
 
-  const handleUpvote = () => {
-    if (!isAuthenticated || !user) {
+  const handleUpvote = (id: number, hasUpvoted: boolean) => {
+    if (!isAuthenticated || !user || !token) {
       toast.error("Please log in to upvote");
       router.push("/login");
       return;
     }
-    upvoteFeedback(feedback.id, user.username);
+    upvoteFeedback(id, token, hasUpvoted);
   };
 
   const handleAddComment = async () => {
@@ -72,7 +72,7 @@ export default function FeedbackDetailPage() {
         feedback.comments = [];
       }
       feedback.comments.push({
-        id: Date.now().toString(),
+        id: Date.now(),
         author: user.username,
         text: comment,
         createdAt: new Date().toISOString(),
@@ -113,8 +113,8 @@ export default function FeedbackDetailPage() {
                 </div>
               </div>
               <Button
-                onClick={handleUpvote}
-                variant={feedback.upvotedBy?.includes(user?.username ?? "") ? "default" : "outline"}
+                onClick={() => handleUpvote(feedback.id, feedback.upvotedBy?.includes(user?.id ?? -1) ?? false)}
+                variant={feedback.upvotedBy?.includes(user?.id ?? -1) ? "default" : "outline"}
                 size="lg"
                 className="flex flex-col items-center gap-1 h-auto py-3 px-4"
               >
@@ -199,3 +199,4 @@ export default function FeedbackDetailPage() {
     </div>
   );
 }
+

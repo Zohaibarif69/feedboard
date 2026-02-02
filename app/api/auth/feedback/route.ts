@@ -19,6 +19,15 @@ async function verifyToken(token: string): Promise<any | null> {
   }
 }
 
+function getTokenFromRequest(request: NextRequest): string | null {
+  const authHeader = request.headers.get("authorization");
+  const bearer = authHeader?.startsWith("Bearer ")
+    ? authHeader.replace("Bearer ", "")
+    : null;
+  const cookieToken = request.cookies.get("token")?.value || null;
+  return bearer || cookieToken;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -78,7 +87,20 @@ export async function GET(request: NextRequest) {
     });
 
     // Format response
-    const results = feedbackItems.map((item) => ({
+    const results = feedbackItems.map((item: {
+      id: number;
+      title: string;
+      description: string;
+      category: string;
+      status: string;
+      upvotes: number;
+      author: { username: string };
+      authorId: number;
+      comments: any[];
+      upvoteBy: { userId: number }[];
+      createdAt: Date;
+      updatedAt: Date;
+    }) => ({
       id: item.id,
       title: item.title,
       description: item.description,
@@ -110,7 +132,7 @@ export async function POST(request: NextRequest) {
 
     // UPVOTE/UNVOTE FEEDBACK
     if (action === "upvote" || action === "unvote") {
-      const token = request.headers.get("authorization")?.replace("Bearer ", "");
+      const token = getTokenFromRequest(request);
       
       if (!token) {
         return NextResponse.json(
@@ -227,9 +249,27 @@ export async function POST(request: NextRequest) {
 
     // CREATE FEEDBACK
     // Validate required fields
-    if (!body.title || !body.description || !body.category || !body.authorId) {
+    const token = getTokenFromRequest(request);
+
+    if (!token) {
       return NextResponse.json(
-        { error: "Missing required fields: title, description, category, authorId" },
+        { error: "Unauthorized - no token provided" },
+        { status: 401 }
+      );
+    }
+
+    const session = await verifyToken(token);
+
+    if (!session) {
+      return NextResponse.json(
+        { error: "Unauthorized - invalid token" },
+        { status: 401 }
+      );
+    }
+
+    if (!body.title || !body.description || !body.category) {
+      return NextResponse.json(
+        { error: "Missing required fields: title, description, category" },
         { status: 400 }
       );
     }
@@ -258,7 +298,7 @@ export async function POST(request: NextRequest) {
         description: body.description,
         category: body.category,
         status: body.status || "open",
-        authorId: body.authorId,
+        authorId: session.userId,
       },
       include: {
         author: {
