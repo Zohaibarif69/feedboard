@@ -123,15 +123,25 @@ export async function POST(request: NextRequest) {
     const expiresIn = 3600; // 1 hour
     const refreshExpiresIn = 604800; // 7 days
 
-    await prisma.session.create({
-      data: {
-        token,
-        refreshToken,
-        userId: user.id,
-        expiresAt: new Date(Date.now() + expiresIn * 1000),
-        refreshExpiresAt: new Date(Date.now() + refreshExpiresIn * 1000),
-      },
-    });
+    console.log("📝 Creating session with token:", token.substring(0, 10) + "...");
+    console.log("📝 User ID:", user.id);
+
+    try {
+      const session = await prisma.session.create({
+        data: {
+          token,
+          refreshToken,
+          userId: user.id,
+          expiresAt: new Date(Date.now() + expiresIn * 1000),
+          refreshExpiresAt: new Date(Date.now() + refreshExpiresIn * 1000),
+        },
+      });
+
+      console.log("✅ Session created with ID:", session.id);
+    } catch (error) {
+      console.error("❌ Error creating session:", error);
+      throw error;
+    }
 
     const response = NextResponse.json(
       {

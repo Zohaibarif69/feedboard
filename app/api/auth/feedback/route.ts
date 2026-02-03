@@ -4,17 +4,32 @@ import { prisma } from "@/lib/prisma";
 // Verify token helper
 async function verifyToken(token: string): Promise<any | null> {
   try {
+    if (!token) {
+      console.error(" No token provided");
+      return null;
+    }
+
+    console.log("🔍 Looking up token in database:", token.substring(0, 10) + "...");
+
     const session = await prisma.session.findUnique({
       where: { token },
       include: { user: true },
     });
 
-    if (!session || session.expiresAt < new Date()) {
+    if (!session) {
+      console.error(" Session not found for token:", token.substring(0, 10) + "...");
       return null;
     }
 
+    if (session.expiresAt < new Date()) {
+      console.error(" Token expired at:", session.expiresAt);
+      return null;
+    }
+
+    console.log("Token verified for user:", session.user.username);
     return session;
   } catch (error) {
+    console.error(" Error verifying token:", error);
     return null;
   }
 }
@@ -109,7 +124,12 @@ export async function GET(request: NextRequest) {
       upvotes: item.upvotes,
       author: item.author.username,
       authorId: item.authorId,
-      comments: item.comments,
+      comments: item.comments.map((c: any) => ({
+        id: c.id,
+        text: c.text,
+        author: c.author.username,
+        createdAt: c.createdAt,
+      })),
       upvotedBy: item.upvoteBy.map((u) => u.userId),
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
@@ -119,7 +139,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Error fetching feedback:", error);
     return NextResponse.json(
-      { error: "Failed to fetch feedback" },
+      { error: "Failed to fetch feedback", details: String(error) },
       { status: 500 }
     );
   }
@@ -132,8 +152,137 @@ export async function POST(request: NextRequest) {
 
     // UPVOTE/UNVOTE FEEDBACK
     if (action === "upvote" || action === "unvote") {
+      try {
+        const token = getTokenFromRequest(request);
+        
+        console.log("📤 Upvote request received");
+        console.log("📤 Token from request:", token ? token.substring(0, 10) + "..." : "NO TOKEN");
+        
+        if (!token) {
+          return NextResponse.json(
+            { error: "Unauthorized - no token provided" },
+            { status: 401 }
+          );
+        }
+
+        const session = await verifyToken(token);
+        
+        if (!session) {
+          console.error("Token verification failed for token:", token.substring(0, 10) + "...");
+          return NextResponse.json(
+            { error: "Unauthorized - invalid token" },
+            { status: 401 }
+          );
+        }
+
+        if (!body.feedbackId) {
+          return NextResponse.json(
+            { error: "Feedback ID is required" },
+            { status: 400 }
+          );
+        }
+
+        const feedbackId = parseInt(body.feedbackId);
+
+        // Check if feedback exists
+        const feedback = await prisma.feedback.findUnique({
+          where: { id: feedbackId },
+        });
+
+        if (!feedback) {
+          return NextResponse.json(
+            { error: "Feedback not found" },
+            { status: 404 }
+          );
+        }
+
+        if (action === "upvote") {
+          // Check if already upvoted
+          const existingUpvote = await prisma.upvote.findUnique({
+            where: {
+              feedbackId_userId: {
+                feedbackId,
+                userId: session.userId,
+              },
+            },
+          });
+
+          if (existingUpvote) {
+            return NextResponse.json(
+              { error: "Already upvoted" },
+              { status: 400 }
+            );
+          }
+
+          // Create upvote and increment counter
+          await prisma.$transaction([
+            prisma.upvote.create({
+              data: {
+                feedbackId,
+                userId: session.userId,
+              },
+            }),
+            prisma.feedback.update({
+              where: { id: feedbackId },
+              data: { upvotes: { increment: 1 } },
+            }),
+          ]);
+
+          return NextResponse.json(
+            { message: "Upvoted successfully" },
+            { status: 200 }
+          );
+        } else {
+          // Remove upvote and decrement counter
+          const existingUpvote = await prisma.upvote.findUnique({
+            where: {
+              feedbackId_userId: {
+                feedbackId,
+                userId: session.userId,
+              },
+            },
+          });
+
+          if (!existingUpvote) {
+            return NextResponse.json(
+              { error: "Not upvoted yet" },
+              { status: 400 }
+            );
+          }
+
+          await prisma.$transaction([
+            prisma.upvote.delete({
+              where: {
+                feedbackId_userId: {
+                  feedbackId,
+                  userId: session.userId,
+                },
+              },
+            }),
+            prisma.feedback.update({
+              where: { id: feedbackId },
+              data: { upvotes: { decrement: 1 } },
+            }),
+          ]);
+
+          return NextResponse.json(
+            { message: "Upvote removed successfully" },
+            { status: 200 }
+          );
+        }
+      } catch (error) {
+        console.error("Error in upvote/unvote:", error);
+        return NextResponse.json(
+          { error: "Failed to process upvote", details: String(error) },
+          { status: 500 }
+        );
+      }
+    }
+
+    // ADD COMMENT
+    if (action === "comment") {
       const token = getTokenFromRequest(request);
-      
+
       if (!token) {
         return NextResponse.json(
           { error: "Unauthorized - no token provided" },
@@ -142,7 +291,7 @@ export async function POST(request: NextRequest) {
       }
 
       const session = await verifyToken(token);
-      
+
       if (!session) {
         return NextResponse.json(
           { error: "Unauthorized - invalid token" },
@@ -150,16 +299,16 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (!body.feedbackId) {
+      if (!body.feedbackId || !body.text) {
         return NextResponse.json(
-          { error: "Feedback ID is required" },
+          { error: "Missing required fields: feedbackId, text" },
           { status: 400 }
         );
       }
 
       const feedbackId = parseInt(body.feedbackId);
 
-      // Check if feedback exists
+      // Verify feedback exists
       const feedback = await prisma.feedback.findUnique({
         where: { id: feedbackId },
       });
@@ -171,80 +320,31 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (action === "upvote") {
-        // Check if already upvoted
-        const existingUpvote = await prisma.upvote.findUnique({
-          where: {
-            feedbackId_userId: {
-              feedbackId,
-              userId: session.userId,
+      const comment = await prisma.comment.create({
+        data: {
+          text: body.text,
+          feedbackId,
+          authorId: session.userId,
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              username: true,
             },
           },
-        });
+        },
+      });
 
-        if (existingUpvote) {
-          return NextResponse.json(
-            { error: "Already upvoted" },
-            { status: 400 }
-          );
-        }
-
-        // Create upvote and increment counter
-        await prisma.$transaction([
-          prisma.upvote.create({
-            data: {
-              feedbackId,
-              userId: session.userId,
-            },
-          }),
-          prisma.feedback.update({
-            where: { id: feedbackId },
-            data: { upvotes: { increment: 1 } },
-          }),
-        ]);
-
-        return NextResponse.json(
-          { message: "Upvoted successfully" },
-          { status: 200 }
-        );
-      } else {
-        // Remove upvote and decrement counter
-        const existingUpvote = await prisma.upvote.findUnique({
-          where: {
-            feedbackId_userId: {
-              feedbackId,
-              userId: session.userId,
-            },
-          },
-        });
-
-        if (!existingUpvote) {
-          return NextResponse.json(
-            { error: "Not upvoted yet" },
-            { status: 400 }
-          );
-        }
-
-        await prisma.$transaction([
-          prisma.upvote.delete({
-            where: {
-              feedbackId_userId: {
-                feedbackId,
-                userId: session.userId,
-              },
-            },
-          }),
-          prisma.feedback.update({
-            where: { id: feedbackId },
-            data: { upvotes: { decrement: 1 } },
-          }),
-        ]);
-
-        return NextResponse.json(
-          { message: "Upvote removed successfully" },
-          { status: 200 }
-        );
-      }
+      return NextResponse.json(
+        {
+          id: comment.id,
+          text: comment.text,
+          author: comment.author.username,
+          createdAt: comment.createdAt,
+        },
+        { status: 201 }
+      );
     }
 
     // CREATE FEEDBACK

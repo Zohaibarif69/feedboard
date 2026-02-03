@@ -20,11 +20,13 @@ export default function FeedbackDetailPage() {
   const [comment, setComment] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const feedback = feedbackList.find((f: any) => f.id === params.id);
+  // Convert string ID from URL to number for comparison
+  const feedbackId = typeof params.id === 'string' ? parseInt(params.id) : params.id;
+  const feedback = feedbackList.find((f: any) => f.id === feedbackId);
 
   if (!feedback) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+      <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50">
         <Header />
         <main className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto">
@@ -60,7 +62,7 @@ export default function FeedbackDetailPage() {
       return;
     }
 
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !user || !token) {
       toast.error("Please log in to comment");
       router.push("/login");
       return;
@@ -68,103 +70,124 @@ export default function FeedbackDetailPage() {
 
     setIsLoading(true);
     try {
+      const response = await fetch("/api/auth/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "comment",
+          feedbackId: feedback.id,
+          text: comment,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to add comment");
+      }
+
+      const newComment = await response.json();
+
+      // Add comment to local state
       if (!feedback.comments) {
         feedback.comments = [];
       }
-      feedback.comments.push({
-        id: Date.now(),
-        author: user.username,
-        text: comment,
-        createdAt: new Date().toISOString(),
-      });
+      feedback.comments.push(newComment);
       setComment("");
       toast.success("Comment added successfully");
     } catch (error) {
-      toast.error("Failed to add comment");
+      console.error("Error adding comment:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to add comment");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+    <div className="min-h-screen bg-gray-100">
       <Header />
 
       <main className="container mx-auto px-4 py-8">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-3xl mx-auto">
           <Button
-            variant="outline"
+            variant="ghost"
             onClick={() => router.back()}
-            className="mb-6"
+            className="mb-6 text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft className="size-4 mr-2" />
-            Back
+            Back to Feedback
           </Button>
 
-          {/* Feedback Details */}
-          <Card className="p-6 mb-6">
-            <div className="flex items-start justify-between mb-4">
+          {/* Feedback Details Card */}
+          <Card className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-6">
+            <div className="flex items-start justify-between gap-6">
               <div className="flex-1">
-                <h1 className="text-3xl font-bold mb-2">{feedback.title}</h1>
-                <p className="text-muted-foreground mb-4">{feedback.description}</p>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Badge>{feedback.category}</Badge>
-                  <Badge variant="outline">{feedback.status}</Badge>
+                <h1 className="text-4xl font-bold text-gray-900 mb-3">{feedback.title}</h1>
+                <p className="text-gray-600 text-lg mb-6 leading-relaxed">{feedback.description}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge className="bg-blue-100 text-blue-800 capitalize">{feedback.category}</Badge>
+                  <Badge variant="outline" className="capitalize border-gray-300 text-gray-700">{feedback.status.replace('_', ' ')}</Badge>
                 </div>
               </div>
-              <Button
-                onClick={() => handleUpvote(feedback.id, feedback.upvotedBy?.includes(user?.id ?? -1) ?? false)}
-                variant={feedback.upvotedBy?.includes(user?.id ?? -1) ? "default" : "outline"}
-                size="lg"
-                className="flex flex-col items-center gap-1 h-auto py-3 px-4"
-              >
-                <ArrowUp className="size-5" />
-                <span className="text-sm font-semibold">{feedback.upvotes}</span>
-              </Button>
+              <div className="flex flex-col items-center gap-2">
+                <Button
+                  onClick={() => handleUpvote(feedback.id, feedback.upvotedBy?.includes(user?.id ?? -1) ?? false)}
+                  variant={feedback.upvotedBy?.includes(user?.id ?? -1) ? "default" : "outline"}
+                  size="lg"
+                  className="flex flex-col items-center gap-1 h-auto py-3 px-4 rounded-lg"
+                >
+                  <ArrowUp className="size-5" />
+                  <span className="text-xs font-semibold">{feedback.upvotes}</span>
+                </Button>
+                <span className="text-xs text-gray-500 text-center">Upvotes</span>
+              </div>
             </div>
 
-            <div className="pt-4 border-t text-sm text-muted-foreground">
-              <p>
-                Posted by <span className="font-semibold">{feedback.author}</span> on{" "}
-                {new Date(feedback.createdAt).toLocaleDateString()}
+            <div className="pt-6 border-t border-gray-200 mt-6">
+              <p className="text-sm text-gray-600">
+                <span className="font-semibold text-gray-900">{feedback.author}</span> posted on{" "}
+                <span className="font-semibold text-gray-900">{new Date(feedback.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
               </p>
             </div>
           </Card>
 
-          {/* Comments Section */}
-          <Card className="p-6">
-            <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
-              <MessageSquare className="size-6" />
+          {/* Comments Section Card */}
+          <Card className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+              <MessageSquare className="size-6 text-blue-600" />
               Comments ({feedback.comments?.length || 0})
             </h2>
 
             {isAuthenticated && (
-              <div className="mb-6 pb-6 border-b">
+              <div className="mb-8 pb-8 border-b border-gray-200">
+                <label className="block text-sm font-semibold text-gray-700 mb-3">Add Your Comment</label>
                 <Textarea
-                  placeholder="Share your thoughts..."
+                  placeholder="Share your thoughts on this feedback..."
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  className="mb-3"
-                  rows={3}
+                  className="mb-4 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                  rows={4}
                 />
                 <Button
                   onClick={handleAddComment}
                   disabled={isLoading}
-                  className="w-full"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg"
                 >
-                  {isLoading ? "Adding..." : "Add Comment"}
+                  {isLoading ? "Adding Comment..." : "Add Comment"}
                 </Button>
               </div>
             )}
 
             {!isAuthenticated && (
-              <div className="mb-6 pb-6 border-b p-4 bg-blue-50 rounded-lg">
-                <p className="text-sm mb-3">
+              <div className="mb-8 pb-8 border border-blue-200 bg-blue-50 rounded-lg p-6 text-center">
+                <p className="text-sm text-gray-700 mb-4">
                   Sign in to add comments and upvote feedback
                 </p>
                 <Button
                   onClick={() => router.push("/login")}
-                  className="w-full"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
                 >
                   Sign In
                 </Button>
@@ -176,20 +199,21 @@ export default function FeedbackDetailPage() {
                 feedback.comments.map((comment: any) => (
                   <div
                     key={comment.id}
-                    className="p-4 bg-gray-50 rounded-lg"
+                    className="p-5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="font-semibold">{comment.author}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(comment.timestamp).toLocaleDateString()}
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="font-semibold text-gray-900">{comment.author}</p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(comment.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                       </p>
                     </div>
-                    <p className="text-sm">{comment.text}</p>
+                    <p className="text-gray-700 leading-relaxed">{comment.text}</p>
                   </div>
                 ))
               ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  No comments yet. Be the first to comment!
+                <p className="text-center text-gray-500 py-12">
+                  <MessageSquare className="size-8 mx-auto mb-3 text-gray-400" />
+                  No comments yet. Be the first to share your thoughts!
                 </p>
               )}
             </div>

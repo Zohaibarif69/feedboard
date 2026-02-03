@@ -36,11 +36,15 @@ export function useFeedback() {
     try {
       setLoading(true);
       const response = await fetch("/api/auth/feedback");
-      if (!response.ok) throw new Error("Failed to fetch feedback");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to fetch feedback");
+      }
       const data = await response.json();
       setFeedbackList(data);
     } catch (error) {
       console.error("Error fetching feedback:", error);
+      setFeedbackList([]);
     } finally {
       setLoading(false);
     }
@@ -93,7 +97,8 @@ export function useFeedback() {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to ${action}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to ${action}`);
       }
 
       // Refresh feedback list to get updated upvote counts
